@@ -1,0 +1,692 @@
+# Formula 1
+
+\-\--
+
+## DEA and ETL process
+
+The purpose of the analysis and interpretation of this data set is making a roadmap of the 73 years of history in this sport, knowing the pilots from years ago and the new ones, the behavior of the circuits and the races, success of the pilots and the ones that after years of quitting are still rocking it . Also this analysis aims to look for the relation of the pilots in the teams and the ages, among others things which could be discovering during the exploratory analysis.
+
+#### Context
+
+Formula 1 (a.k.a. F1 or Formula One) is the highest class of single-seater auto racing sanctioned by the Fédération Internationale de l'Automobile (FIA) and owned by the Formula One Group. The FIA Formula One World Championship has been one of the premier forms of racing around the world since its inaugural season in 1950. The word "formula" in the name refers to the set of rules to which all participants' cars must conform. A Formula One season consists of a series of races, known as Grands Prix, which take place worldwide on purpose-built circuits and on public roads.
+
+#### Dataset
+
+The dataset consists of all information on the Formula 1 races, drivers, constructors, qualifying, circuits, lap times, pit stops, championships from 1950 till the latest 2023 season.
+
+#### Acknowledgements
+
+The data is compiled from <http://ergast.com/mrd/>
+
+Link dataset: <https://www.kaggle.com/datasets/rohanrao/formula-1-world-championship-1950-2020/data>
+
+--
+
+## 1. Carga y comprensión general de la base de datos
+
+Cargue de las bases de datos relacionadas a la información de pilotos, constructores, carreras, circuitos, estados, etc de la fórmula 1 desde 1950 a 2023, en total son 15 bases. Check de los tipos de datos que almacena cada variable y acercamiento de la informacion que proporciona cada base de datos.
+
+```{r}
+
+# Librerías para manipulación y limpieza de datos
+install.packages("dplyr")   # Manipulación de datos
+install.packages("tidyr")   # Tidy data
+install.packages("readr")   # Lectura de datos
+install.packages("stringr") # Manipulación de strings
+install.packages("forcats") # Manipulación de factores
+
+# Librerías para visualización de datos
+install.packages("ggplot2")  # Gráficos
+install.packages("plotly")   # Gráficos interactivos
+install.packages("ggthemes") # Temas para ggplot2
+install.packages("gridExtra")# Añadir gráficos a una grilla
+
+# Librerías para modelado y estadísticas
+install.packages("stats")   # Funciones estadísticas básicas
+install.packages("glm")     # Modelos lineales generalizados
+install.packages("randomForest") # Random forests
+install.packages("caret")   # Entrenamiento de modelos y evaluación
+
+# Librerías para machine learning
+install.packages("mlr")     # Machine learning en R
+install.packages("e1071")   # Support Vector Machines
+
+# Otras librerías útiles
+install.packages("tibble")  # Data frames mejorados
+install.packages("lubridate") # Manipulación de fechas
+install.packages("readxl")  # Leer archivos de Excel
+install.packages("rvest")   # Web scraping
+install.packages("shiny")   # Crear aplicaciones web interactivas
+
+```
+
+```{r}
+
+# Establecer el directorio de trabajo
+setwd("C:/Users/Owner/Documents/Cursos Gabriela/LGPB/Portafolio/RStudio/F1")
+
+# Listar los archivos en la carpeta
+lista_de_archivos <- list.files()
+
+# Inicializar una lista para almacenar los datos de los archivos
+lista_de_datos <- list()
+
+# Leer los archivos en un bucle y almacenarlos en la lista
+for (archivo in lista_de_archivos) {
+  # Agregar la ruta completa al archivo
+  ruta_archivo <- file.path(getwd(), archivo)
+  
+  # Leer el archivo y almacenarlo en la lista de datos
+  datos <- read.csv(ruta_archivo)  # Puedes ajustar la función según el tipo de archivo
+  lista_de_datos[[archivo]] <- datos
+}
+
+# Cargar los datos en el entorno global
+list2env(lista_de_datos, envir = .GlobalEnv)
+
+
+```
+
+```{r}
+
+knitr::opts_knit$set(root.dir = "C:/Users/Owner/Documents/Cursos Gabriela/LGPB/Portafolio/RStudio/F1")
+
+```
+
+Check de la cantidad de bases en el entorno del programa:
+
+```{r}
+
+# Listar los objetos en el entorno global
+objetos_en_entorno <- ls()
+
+# Filtrar los objetos que son de tipo data.frame
+bases_de_datos_cargadas <- objetos_en_entorno[sapply(objetos_en_entorno, function(obj) is.data.frame(get(obj)))]
+
+# Imprimir la cantidad y nombres de las bases de datos cargadas
+cat("Número de bases de datos cargadas:", length(bases_de_datos_cargadas), "\n")
+cat("Nombres de las bases de datos cargadas:", bases_de_datos_cargadas, "\n")
+
+
+```
+
+Estructura de los datos cargados en el entorno:
+
+```{r}
+
+# Imprime la estructura de los datos
+
+for (archivo in names(lista_de_datos)) {
+  print(paste("Leyendo archivo:", archivo))
+  datos <- lista_de_datos[[archivo]]
+  str(datos)  # Imprime la estructura de los datos
+}
+
+```
+
+## 2. ETL - Extracción, Tranformación y Carga de los datos:
+
+En total son 15 bases, a traves de un getso de bases de datos, en este caso se busca limpiar las bases para permitir la correcta interpretación y análisis relacionado a los contructores o quipos, pilotos, carreras, circuitos, resultados, status de carrera, etc.
+
+<div>
+
+## Tranformaciones realizadas:
+
+1.  Datos inconsistentes: En algunas columnas de las bases de datos se tienen valores incosistentes como "//n" en la base de "races.csv"en la columna "date".
+
+2.  Formatos: Las columnas de "date" almacenadas en las bases estan en tipo de dato "Character".
+
+3.  Nuevas variables: Agregaron 2 variables, el nombre completo y la edad de los pilotos.
+
+4.  Unión de bases a través de sus claves primarias logrando unificar la información.
+
+</div>
+
+### Transformación 1
+
+```{r}
+
+# Transformación 1:
+
+# REEMPLAZAR \N POR 0, en las columnas tipo "fp1_date". IMPORTANE: - Para futuros analisis estos registros se excluyen. -
+
+
+# Lista con los nombres de las bases de datos en el ambiente global
+bases_de_datos <- ls(pattern = "*.csv")
+
+# Realiza la transformación para cada base de datos
+for (base in bases_de_datos) {
+  # Carga la base de datos
+  data <- get(base)
+  
+  # Aplica la transformación
+  data_transformed <- data %>% 
+    mutate_all(~ ifelse(. == "\\N", 0, .))
+  
+  # Actualiza la base de datos en el ambiente global
+  assign(base, data_transformed, envir = .GlobalEnv)
+}
+
+
+```
+
+### Transformación 2
+
+```{r}
+
+# Transformación 2: DE COLUMNAS EN FORMATO CHARACTER A FECHA TIPO YY-MM-DD
+
+
+# Lista de nombres de los DataFrames cargados en el entorno de R
+lista_dataframes <- ls()
+
+# Itera sobre cada DataFrame
+for (nombre_df in lista_dataframes) {
+  
+  # Verifica si el objeto en la lista es un DataFrame
+  if (is.data.frame(get(nombre_df))) {
+    
+    # Obtén el DataFrame
+    df <- get(nombre_df)
+    
+    # Verifica si la columna 'date' existe en el DataFrame
+    if ('date' %in% colnames(df)) {
+      
+      # Convierte la columna 'date' a formato de fecha
+      df$date <- as.Date(df$date, format = "%Y-%m-%d")
+      
+      # Actualiza el DataFrame en el entorno de R
+      assign(nombre_df, df, envir = .GlobalEnv)
+      
+      cat("Transformación aplicada en", nombre_df, "\n")
+    } else {
+      cat("El DataFrame", nombre_df, "no tiene una columna 'date'\n")
+    }
+  } else {
+    cat("El objeto", nombre_df, "no es un DataFrame\n")
+  }
+}
+
+
+
+```
+
+### Transformación 3
+
+```{r}
+
+# Transformación 3: 
+
+# creación columna edad pilotos
+# Establece la fecha actual
+fecha_actual <- as.Date("2023-11-30")
+
+# Calcula la diferencia entre las fechas
+drivers.csv$edad <- as.integer(round(difftime(fecha_actual, drivers.csv$dob, units = "days") / 365.25))
+
+# Muestra el DataFrame con la nueva columna de edad
+print(drivers.csv)
+
+```
+
+### Transformación 4
+
+```{r}
+
+
+# Tranformación 4:
+
+# Creación nombre completo de pilotos haciendo concatenando la columnas de nombre y apellido
+# Combina las columnas 'nombre' y 'apellido' en 'nombre_completo'
+drivers.csv$names <- paste(drivers.csv$forename, drivers.csv$surname, sep = " ")
+
+# Imprime el DataFrame resultante
+print(drivers.csv)
+
+
+```
+
+### Transformación 5
+
+```{r}
+
+
+# total de escuderias y el performance en el periodo de 1953-2023
+
+merged_data <- merge(constructor_standings.csv, constructors.csv, by = "constructorId")
+merged_data
+
+
+# las escuderias y el total de resultados (puntos, paradas, tiempos)
+results_constructors <- merge(constructors.csv, results.csv, by = 'constructorId', all.x = TRUE) # all.x = true - indica que es un left join
+
+
+# merge entra los tipos de carreras realizadas y los resultados obtenidos
+race_result <- merge(races.csv, results.csv, by = 'raceId')
+
+
+# los pits realizados en las carreras
+pitstops <- merge(pit_stops.csv, races.csv, by = 'raceId')
+
+
+# tipos de circuitos que se realizaron en las carreras
+circuitos <- merge(races.csv, circuits.csv, on='circuitId', all.x = TRUE)
+
+
+# los laptimes de cada carrera realizada
+laptimes_in_races <- merge(races.csv, lap_times.csv, on='raceId',all.x = TRUE)
+
+
+# los resultados por piloto
+races_winners <- merge(race_result, drivers.csv, on='driverId', all.x = TRUE)
+
+
+# laptimes por cada piloto
+laptimes_drivers <- merge(races_winners, lap_times.csv, on='raceId')
+
+
+# resultados de las carreras y el status generado por cada una
+status_per_race <- merge( status.csv, races_winners, on='driverId', all.x = TRUE)
+
+ganadores_carreras <- merge( driver_standings.csv, drivers.csv, on='driverId', all.x = TRUE)
+
+```
+
+## 3. Análisis Exploratorio de Datos
+
+```{r}
+
+
+# Cantidad de pilotos desde 1970 a 2023
+conteo_unicos <- length(unique(drivers.csv$driverId))
+conteo_unicos
+
+# Equipos presentes en la F1
+
+# Cantidades de escuderias
+escuderias_unicos <- length(unique(constructors.csv$constructorRef))
+
+
+
+# Escuderias que estan reportadas desde los 50 hasta 2023 / registros de las escuderias que ya no aparecen al 2023
+# Contar los registros únicos de escuderías en constructors.csv
+escuderias_unicas <- unique(constructors.csv$constructorId)
+
+
+
+# Filtrar las escuderías únicas que no han participado en la Fórmula 1 desde 2023-01-01
+escuderias_no_en_f1 <- escuderias_unicas[!(escuderias_unicas %in% race_result$constructorId[race_result$date >= as.Date("2023-01-01")])]
+
+
+
+# Obtener la cantidad de escuderías únicas que no han participado en la Fórmula 1 desde 2023-01-01
+cantidad_escuderias_no_en_f1 <- length(escuderias_no_en_f1)
+
+
+
+# Imprimir el resultado
+print(cantidad_escuderias_no_en_f1) #201 escuderias desaparecieron del 50 a 2023
+
+
+
+
+# Filtrar el DataFrame constructors.csv para obtener los nombres de las escuderías
+nombres_escuderias_no_f1 <- constructors.csv$name[constructors.csv$constructorId %in% escuderias_no_en_f1] # nombres de las escuderias que ya no estan en la F1
+
+
+
+
+
+```
+
+```{r}
+
+# Escuderías que sí han participado en la Fórmula 1 desde 2023-01-01
+escuderias_en_f1 <- escuderias_unicas[escuderias_unicas %in% race_result$constructorId[race_result$date >= as.Date("2023-01-01")]]
+
+
+
+
+# Filtrar el DataFrame constructors.csv para obtener los nombres de las escuderías
+nombres_escuderias_en_f1 <- constructors.csv$name[constructors.csv$constructorId %in% escuderias_en_f1]
+
+
+
+
+# cantidad de circuitos desde 1950
+circuitos_unicos <- length(unique(circuits.csv$name))
+
+
+
+
+# pilotos con mayor numero de victorias en la historia de la formula 1
+# Agrupar por piloto y sumar las victorias
+
+pilotos_mas_victorias <- ganadores_carreras %>%
+  group_by(driverRef) %>%
+  summarise(total_victorias = sum(wins, na.rm = TRUE)) %>%
+  arrange(desc(total_victorias))
+
+
+
+
+
+# status más registrado desde los 50
+datos_filtrados <- race_result %>% filter(statusId != 1)
+
+# Cuenta la frecuencia de cada valor en statusId después del filtro
+frecuencias <- table(datos_filtrados$statusId)
+
+# Encuentra el valor que más se repite
+valor_mas_comun <- names(frecuencias)[which.max(frecuencias)]
+
+
+
+
+# accidentes de seguridad Safety concerns reportados en la f1
+accidentes <- status_per_race %>% filter(statusId == 89)
+cantidad_de_accidentes <- nrow(accidentes)
+cantidad_de_accidentes
+
+
+
+# cantidad de carreras
+n_carreras <- length(unique(races.csv$raceId))
+n_carreras
+
+
+
+
+# Filtrar valores únicos por nombre de piloto
+paises_circuitos <- circuits.csv %>% distinct(country)
+paises_circuitos
+
+
+
+
+# Identify drivers who raced in 2023
+drivers_2023 <- unique(race_result[race_result$date >= as.Date("2023-01-01"), "driverId"])
+
+# Filter the dataset for drivers who raced in 2023 or earlier
+filtered_base <- race_result[race_result$driverId %in% drivers_2023, ]
+
+# cantidad de pilotos
+pilotos <- length(unique(filtered_base$driverId))
+pilotos
+
+```
+
+## 4. Visualizaciones
+
+### Gráfica N1 - TOP 10 de Victorias por pilotos
+
+```{r}
+
+# PILOTOS CON CARRERAS GANADAS
+
+ganadores <- merge(driver_standings.csv, drivers.csv[, c('driverId', "names")], by = 'driverId', all.x = TRUE)
+
+
+
+# Calcular el máximo número de victorias por piloto
+max_victorias_por_piloto <- aggregate(wins ~ driverId, data = driver_standings.csv, FUN = max)
+
+
+# Fusionar con el dataframe de nombres de pilotos
+victorias_nombres_pilotos <- merge(max_victorias_por_piloto, drivers.csv, by = 'driverId')
+
+
+# Imprimir el nombre único del piloto con la mayor cantidad de victorias y su respectivo máximo de victorias
+print(victorias_nombres_pilotos[, c("names", "wins")])
+
+
+# Ordenar los pilotos por número de victorias y tomar los primeros 10
+top_10_pilotos <- head(arrange(victorias_nombres_pilotos, desc(wins)), 10)
+
+
+
+library(ggplot2)
+
+
+# GRAFICO VERTICAL CON ETIQUETA DE DATOS
+ggplot(top_10_pilotos, aes(x = reorder(names, wins), y = wins, label = wins)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  geom_text(aes(label = wins), vjust = -0.5, size = 3) +  # Agregar números de victorias
+  labs(title = "Top 10 Pilotos con Mayor Número de Victorias",
+       x = "Nombre del Piloto",
+       y = "Número de Victorias") +
+  theme_minimal()
+
+```
+
+### Gráfico N2 - Nacionalidades más reportadas de los pilotos
+
+```{r}
+
+# nacionalidades pilotos
+nacionalidades <- drivers.csv %>% distinct(nationality)
+nacionalidades
+# hay 42 nacionalidades en total 
+
+
+# TOP 5 de las nacionalidades mas recurrentes en los pilotos 
+
+# Calcular el porcentaje de participación de cada nacionalidad
+porcentaje_nacionalidades <- prop.table(table(drivers.csv$nationality)) * 100
+
+# Filtrar las nacionalidades con mayor participación (opcional)
+nacionalidades_mas_participativas <- names(porcentaje_nacionalidades[porcentaje_nacionalidades > 5])
+
+# Crear una paleta de colores para la gráfica de torta
+# colores <- rainbow(length(nacionalidades_mas_participativas))
+
+
+
+
+
+# CARGAR PAQUETES DE COLORES PARA LAS GRAFICAS
+# Cargar el paquete RColorBrewer
+library(RColorBrewer)
+
+# Definir el número de tonalidades de azul que deseas
+num_tonalidades <- length(nacionalidades_mas_participativas)
+
+# Crear una secuencia de tonalidades de azul
+colores <- brewer.pal(num_tonalidades, "Blues")
+
+
+
+
+# GRAFICA DE PIE CON ETIQUETAS DE DATOS
+
+# Crear la gráfica de torta CON ETIQUETAS DE DATOS
+pie(porcentaje_nacionalidades[nacionalidades_mas_participativas], 
+    labels = paste0(nacionalidades_mas_participativas, "\n", round(porcentaje_nacionalidades[nacionalidades_mas_participativas], 1), "%"),
+    col = colores,
+    main = "Porcentaje de participación por nacionalidad de los pilotos")
+
+
+```
+
+### Gráfico N3 - Puntos reportados por equipos y circuitos en el 2023
+
+```{r}
+
+# son 10 equipos reportados hasta el 2023
+race_results <- merge(race_result, constructors.csv, by = 'constructorId')
+
+
+
+# Sumar los puntos de cada equipo en cada carrera
+datos_agrupados <- datos_agrupados %>% 
+  group_by(name.y, name.x) %>% 
+  summarize(total_puntos = sum(points))
+
+
+
+# Ordenar los equipos por puntos
+datos_agrupados <- datos_agrupados[order(-datos_agrupados$total_puntos), ]
+
+
+
+
+# Crear la interfaz de usuario: genera el panel, el diseno, el panel ppal etc
+ui <- fluidPage(
+  titlePanel("Gráfica de Puntos por Equipo en Circuitos"),
+  sidebarLayout(
+    sidebarPanel(
+      selectInput("circuito", "Circuito:",
+                  choices = unique(datos_agrupados$name.x),
+                  selected = "Australian Grand Prix")
+    ),
+    mainPanel(
+      plotOutput("grafica")
+    )
+  )
+)
+
+# Definir servidor: se genera la logica del servidor para agregar la graf deseada utilizando los datos necesarios
+server <- function(input, output) {
+  output$grafica <- renderPlot({
+    # Filtrar los datos por circuito seleccionado
+    datos_circuito <- datos_agrupados %>% filter(name.x == input$circuito)
+    
+    # Ordenar los equipos por puntos
+    datos_circuito <- datos_circuito[order(-datos_circuito$total_puntos), ]
+    
+    # Seleccionar los 10 primeros equipos
+    datos_circuito <- head(datos_circuito, 10)
+    
+    # Crear el gráfico
+    ggplot(data = datos_circuito, aes(x = reorder(name.y, total_puntos), y = total_puntos)) +
+      geom_bar(stat = "identity", fill = "steelblue") +
+      geom_text(aes(label = total_puntos), vjust = -0.5, size = 3) +  # Etiquetas de datos
+      labs(title = paste("Puntos por equipo en", input$circuito),
+           x = "Equipo", y = "Puntos") +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8), # Tamaño del texto en el eje X
+            axis.text.y = element_text(size = 8), # Tamaño del texto en el eje Y
+            plot.title = element_text(size = 10)) # Tamaño del título
+  })
+}
+
+# Ejecutar la aplicación
+shinyApp(ui = ui, server = server) # permite abrir las graficas de forma interactiva
+```
+
+### Gráfico N4 - Puntos reportados por el TOP5 de equipos
+
+```{r}
+# Crear la interfaz de usuario
+ui <- fluidPage(
+  titlePanel("Gráfica de Puntos Promedio del Top 5 de las Mejores Escuderías"),
+  sidebarLayout(
+    sidebarPanel(
+      # Puedes añadir elementos de la interfaz aquí si lo deseas
+    ),
+    mainPanel(
+      plotOutput("grafica")
+    )
+  )
+)
+
+# Definir el servidor
+server <- function(input, output) {
+  # Calcular el promedio de puntos para cada escudería
+  promedios_escuderias <- datos_agrupados %>%
+    group_by(name.y) %>%
+    summarize(promedio_puntos = mean(total_puntos))
+
+  # Seleccionar las cinco mejores escuderías
+  top5_escuderias <- promedios_escuderias %>%
+    top_n(5, promedio_puntos) %>%
+    arrange(desc(promedio_puntos))
+
+  # Filtrar los datos originales para incluir solo las filas correspondientes a las cinco mejores escuderías
+  datos_top5 <- datos_agrupados %>%
+    filter(name.y %in% top5_escuderias$name.y)
+
+  # Crear la gráfica de líneas
+  output$grafica <- renderPlot({
+    ggplot(data = datos_top5, aes(x = name.x, y = total_puntos, group = name.y, color = name.y)) +
+      geom_line() +
+      geom_point() +
+      labs(title = "Puntos promedio del top 5 de las mejores escuderías",
+           x = "Carrera", y = "Puntos") +
+      theme_minimal() +
+      theme(axis.text.x = element_text(angle = 90, vjust = 0.5))
+  })
+}
+
+# Ejecutar la aplicación Shiny
+shinyApp(ui = ui, server = server)
+
+
+```
+
+### Gráfico N5 - TOP10 de Laptimes por pilotos
+
+```{r}
+
+laptimes <-merge(lap_times.csv,drivers.csv,by="driverId")
+
+# Filtrar los datos para obtener los TOP10 de los pilotos con el menor laptime
+top10_laptimes <- laptimes %>%
+  group_by(names) %>%
+  summarize(min_laptime = min(milliseconds)) %>%
+  arrange(min_laptime) %>%
+  head(10)
+
+# Crear la gráfica de líneas
+ggplot(data = top10_laptimes, aes(x = names, y = min_laptime)) +
+  geom_line() +
+  geom_point() +
+  labs(title = "TOP10 de Laptimes por pilotos",
+       x = "Driver ID",
+       y = "Milliseconds")
+```
+
+### Gráfico N6 - Matriz de correlación de la ba
+
+```{r}
+
+
+# Seleccionar columnas numéricas
+numeric_data <- sprint_results.csv[, sapply(sprint_results.csv, is.numeric)]
+
+# Calcular la matriz de correlación
+correlation_matrix <- cor(numeric_data)
+
+# Visualizar la matriz de correlación con un mapa de calor
+library(ggplot2)
+ggplot(data = reshape2::melt(correlation_matrix), aes(x = Var1, y = Var2, fill = value)) +
+  geom_tile() +
+  labs(title = "Matriz de Correlación",
+       x = "Variables",
+       y = "Variables") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+```
+
+### Gráfico N7 - Ubicación de los diferentes circuitos de 1953 a 2023 de la F1
+
+```{r}
+
+# Instalar y cargar la librería leaflet
+if (!requireNamespace("leaflet", quietly = TRUE)) {
+  install.packages("leaflet")
+}
+library(leaflet)
+
+# Leer el archivo CSV con los datos de los circuitos
+circuits <- circuits.csv
+
+# Crear un mapa con la vista inicial centrada en una ubicación y con un nivel de zoom
+map <- leaflet(data = circuits, options = leafletOptions(center = c(0, 0), zoom = 2)) %>%
+  addTiles() %>%
+  addCircleMarkers(lng = ~lng, lat = ~lat, popup = ~name)  # name es el nombre del circuito en tu base de datos
+
+# Mostrar el mapa
+map
+
+```
